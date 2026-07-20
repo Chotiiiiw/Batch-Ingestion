@@ -29,7 +29,7 @@ erDiagram
     RESTAURANTS ||--o{ ORDERS : receives
     ORDERS ||--|{ ORDER_ITEMS : contains
     ORDERS ||--o{ PAYMENTS : has
-    ORDERS ||--o| DELIVERIES : has
+    ORDERS ||--o{ DELIVERIES : has_attempts
     DRIVERS ||--o{ DELIVERIES : handles
 
     CUSTOMERS {
@@ -47,6 +47,7 @@ erDiagram
         varchar restaurant_name
         varchar category
         varchar city
+        varchar address
         varchar status
         datetime created_at
         datetime updated_at
@@ -93,7 +94,7 @@ erDiagram
     DRIVERS {
         bigint driver_id PK
         varchar driver_name
-        varchar vehicle_type
+        varchar number_plate
         varchar driver_status
         datetime created_at
         datetime updated_at
@@ -203,7 +204,7 @@ erDiagram
     FACT_ORDERS ||--|{ FACT_ORDER_ITEMS : contains
     DIM_MENU_ITEM ||--o{ FACT_ORDER_ITEMS : identifies
     FACT_ORDERS ||--o{ FACT_PAYMENTS : has
-    FACT_ORDERS ||--o| FACT_DELIVERIES : has
+    FACT_ORDERS ||--o{ FACT_DELIVERIES : has_attempts
     DIM_DRIVER ||--o{ FACT_DELIVERIES : handles
 
     DIM_DATE {
@@ -232,6 +233,7 @@ erDiagram
         varchar restaurant_name
         varchar category
         varchar city
+        varchar address
         varchar status
         timestamp effective_from
         timestamp effective_to
@@ -252,7 +254,7 @@ erDiagram
         bigint driver_key PK
         bigint driver_id UK
         varchar driver_name
-        varchar vehicle_type
+        varchar number_plate
     }
 
     FACT_ORDERS {
