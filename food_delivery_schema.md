@@ -193,19 +193,282 @@ erDiagram
 
 ## 3. PostgreSQL warehouse schema
 
-The target uses a star schema. Surrogate keys are used for dimensions while
-source identifiers are retained for traceability.
+The target uses a fact constellation: four fact tables share conformed
+dimensions. Every dimension uses a warehouse-generated surrogate key, while
+the source identifier remains available for tracing records back to MySQL or
+MongoDB.
 
+```mermaid
+erDiagram
+    ETL_BATCH ||--o{ DIM_CUSTOMER : batch_id
+    ETL_BATCH ||--o{ DIM_RESTAURANT : batch_id
+    ETL_BATCH ||--o{ DIM_MENU_ITEM : batch_id
+    ETL_BATCH ||--o{ DIM_DRIVER : batch_id
+    ETL_BATCH ||--o{ FACT_ORDER : batch_id
+    ETL_BATCH ||--o{ FACT_ORDER_ITEM : batch_id
+    ETL_BATCH ||--o{ FACT_PAYMENT : batch_id
+    ETL_BATCH ||--o{ FACT_DELIVERY_ATTEMPT : batch_id
 
+    DIM_CUSTOMER ||--o{ FACT_ORDER : customer_key
+    DIM_RESTAURANT ||--o{ FACT_ORDER : restaurant_key
+    DIM_DATE ||--o{ FACT_ORDER : order_date_key
+
+    DIM_CUSTOMER ||--o{ FACT_ORDER_ITEM : customer_key
+    DIM_RESTAURANT ||--o{ FACT_ORDER_ITEM : restaurant_key
+    DIM_MENU_ITEM ||--o{ FACT_ORDER_ITEM : menu_item_key
+    DIM_DATE ||--o{ FACT_ORDER_ITEM : order_date_key
+
+    DIM_CUSTOMER ||--o{ FACT_PAYMENT : customer_key
+    DIM_RESTAURANT ||--o{ FACT_PAYMENT : restaurant_key
+    DIM_PAYMENT_METHOD ||--o{ FACT_PAYMENT : payment_method_key
+    DIM_DATE ||--o{ FACT_PAYMENT : payment_created_date_key
+    DIM_DATE ||--o{ FACT_PAYMENT : paid_date_key
+
+    DIM_CUSTOMER ||--o{ FACT_DELIVERY_ATTEMPT : customer_key
+    DIM_RESTAURANT ||--o{ FACT_DELIVERY_ATTEMPT : restaurant_key
+    DIM_DRIVER ||--o{ FACT_DELIVERY_ATTEMPT : driver_key
+    DIM_DATE ||--o{ FACT_DELIVERY_ATTEMPT : assigned_date_key
+
+    ETL_BATCH {
+        uuid batch_id PK
+        timestamptz started_at
+        timestamptz completed_at
+        varchar batch_status
+        timestamptz mysql_watermark_from
+        timestamptz mysql_watermark_to
+        timestamptz mongo_watermark_from
+        timestamptz mongo_watermark_to
+        bigint input_row_count
+        bigint loaded_row_count
+        bigint rejected_row_count
+        text error_message
+    }
+
+    DIM_CUSTOMER {
+        bigint customer_key PK
+        bigint customer_id
+        varchar full_name
+        varchar email
+        varchar phone
+        varchar city
+        timestamptz valid_from
+        timestamptz valid_to
+        boolean is_current
+        varchar hash_diff
+        timestamptz source_updated_at
+        uuid batch_id FK
+        timestamptz loaded_at
+    }
+
+    DIM_RESTAURANT {
+        bigint restaurant_key PK
+        bigint restaurant_id
+        varchar restaurant_name
+        varchar category
+        varchar city
+        varchar address
+        varchar status
+        timestamptz valid_from
+        timestamptz valid_to
+        boolean is_current
+        varchar hash_diff
+        timestamptz source_updated_at
+        uuid batch_id FK
+        timestamptz loaded_at
+    }
+
+    DIM_MENU_ITEM {
+        bigint menu_item_key PK
+        varchar menu_item_id
+        bigint restaurant_id
+        varchar menu_item_name
+        varchar category
+        numeric base_price
+        boolean available
+        text_array tags
+        timestamptz valid_from
+        timestamptz valid_to
+        boolean is_current
+        varchar hash_diff
+        timestamptz source_updated_at
+        uuid batch_id FK
+        timestamptz loaded_at
+    }
+
+    DIM_PAYMENT_METHOD {
+        smallint payment_method_key PK
+        varchar payment_method_code UK
+        varchar payment_method_name
+        boolean is_active
+    }
+
+    DIM_DRIVER {
+        bigint driver_key PK
+        bigint driver_id
+        varchar driver_name
+        varchar number_plate
+        varchar driver_status
+        timestamptz valid_from
+        timestamptz valid_to
+        boolean is_current
+        varchar hash_diff
+        timestamptz source_updated_at
+        uuid batch_id FK
+        timestamptz loaded_at
+    }
+
+    DIM_DATE {
+        integer date_key PK
+        date full_date UK
+        smallint day_of_month
+        smallint day_of_week
+        varchar day_name
+        smallint week_of_year
+        smallint month_number
+        varchar month_name
+        smallint quarter_number
+        integer year_number
+        boolean is_weekend
+    }
+
+    FACT_ORDER {
+        bigint order_key PK
+        bigint order_id UK
+        bigint customer_key FK
+        bigint restaurant_key FK
+        integer order_date_key FK
+        varchar order_status
+        numeric subtotal
+        numeric discount
+        numeric delivery_fee
+        numeric total_amount
+        timestamptz ordered_at
+        timestamptz source_updated_at
+        uuid batch_id FK
+        timestamptz loaded_at
+    }
+
+    FACT_ORDER_ITEM {
+        bigint order_item_key PK
+        bigint order_item_id UK
+        bigint order_id
+        bigint customer_key FK
+        bigint restaurant_key FK
+        bigint menu_item_key FK
+        integer order_date_key FK
+        integer quantity
+        numeric unit_price
+        numeric total_price
+        timestamptz ordered_at
+        timestamptz source_updated_at
+        uuid batch_id FK
+        timestamptz loaded_at
+    }
+
+    FACT_PAYMENT {
+        bigint payment_key PK
+        bigint payment_id UK
+        bigint order_id
+        bigint customer_key FK
+        bigint restaurant_key FK
+        smallint payment_method_key FK
+        integer payment_created_date_key FK
+        integer paid_date_key FK
+        varchar payment_status
+        numeric amount
+        varchar transaction_ref
+        timestamptz payment_created_at
+        timestamptz paid_at
+        timestamptz source_updated_at
+        uuid batch_id FK
+        timestamptz loaded_at
+    }
+
+    FACT_DELIVERY_ATTEMPT {
+        bigint delivery_attempt_key PK
+        bigint delivery_id UK
+        bigint order_id
+        bigint customer_key FK
+        bigint restaurant_key FK
+        bigint driver_key FK
+        integer assigned_date_key FK
+        varchar delivery_status
+        numeric distance_km
+        timestamptz assigned_at
+        timestamptz picked_up_at
+        timestamptz delivered_at
+        timestamptz source_updated_at
+        uuid batch_id FK
+        timestamptz loaded_at
+    }
+```
 
 ### Fact table grain
 
 | Fact table | One row represents |
 |---|---|
-| `fact_orders` | One food order |
-| `fact_order_items` | One menu item line within an order |
-| `fact_payments` | One payment or refund transaction |
-| `fact_deliveries` | One delivery attempt for an order |
+| `fact_order` | One food order |
+| `fact_order_item` | One menu item line within an order |
+| `fact_payment` | One source payment record and its current lifecycle state |
+| `fact_delivery_attempt` | One delivery attempt for an order |
+
+### Dimension history strategy
+
+- `dim_customer`, `dim_restaurant`, `dim_menu_item`, and `dim_driver` use
+  Slowly Changing Dimension Type 2. A changed source record creates a new row;
+  `valid_from`, `valid_to`, and `is_current` identify its effective period.
+- The first version uses source `created_at` as `valid_from`; later versions use
+  source `updated_at`. Each dimension enforces uniqueness on
+  `(source_identifier, valid_from)` and allows only one `is_current = true` row
+  per source identifier.
+- Version periods use the half-open interval `[valid_from, valid_to)` so two
+  versions never overlap. The current version has `valid_to = NULL`.
+- `hash_diff` contains a deterministic hash of the tracked business attributes.
+  ETL creates a new version only when this hash changes; changes to audit fields
+  alone do not create dimension versions.
+- `dim_date` and `dim_payment_method` are static reference dimensions and do
+  not require history columns.
+- Fact rows resolve each surrogate key against the dimension version effective
+  at the event timestamp, so later source changes do not rewrite history.
+
+### Key and loading rules
+
+- Event timestamps are stored as `TIMESTAMPTZ`. Positive `date_key` values use
+  `YYYYMMDD` after converting the timestamp from UTC to the warehouse business
+  timezone, `Asia/Bangkok`; key `0` is reserved for the unknown date.
+- `fact_order_item.ordered_at` and `order_date_key` are derived by joining each
+  source order item to its parent order during transformation. Keeping the
+  timestamp on the item fact supports hourly menu analysis without joining one
+  fact table to another.
+- `fact_payment.payment_created_date_key` always derives from source
+  `payments.created_at`. `paid_date_key` derives from nullable `paid_at` and
+  uses the unknown date member while a payment is pending.
+- `order_id` is retained as a degenerate dimension in item, payment, and
+  delivery facts. The facts intentionally do not reference `fact_order`, which
+  keeps them independently loadable and preserves the star-schema pattern.
+- Source event identifiers (`order_id`, `order_item_id`, `payment_id`, and
+  `delivery_id`) are unique in their respective fact tables. ETL loads use
+  these identifiers for idempotent upserts.
+- Every source-driven table stores `source_updated_at`. An upsert may replace a
+  fact row only when the incoming source timestamp is newer, preventing a
+  replayed or out-of-order batch from overwriting newer data.
+- Each dimension has a reserved surrogate key `0` for an unknown or
+  late-arriving member. ETL updates the fact foreign key when the real member
+  later arrives. Invalid business keys, such as a malformed or nonexistent
+  menu item ID, are quarantined instead of being silently mapped to unknown.
+- Monetary fields use `NUMERIC(12,2)`; `distance_km` uses `NUMERIC(8,2)`.
+  Quantities and monetary values must be non-negative. In the current source,
+  `REFUNDED` is a payment lifecycle status and its amount remains positive; a
+  separate negative refund transaction requires a dedicated source refund ID
+  and timestamp, which are not currently available.
+- `etl_batch` stores the status, source watermark ranges, row counts, and error
+  details for every Spark run. Each source-driven dimension and fact stores the
+  UUID `batch_id` of the batch that last inserted or updated it, plus
+  `loaded_at` for lineage and replay audits.
+- Static `dim_date` and `dim_payment_method` rows are seeded during warehouse
+  initialization and therefore do not require a `batch_id`.
+  Foreign-key columns and common query fields such as event date, `order_id`,
+  and `batch_id` should be indexed.
 
 ## 4. Incremental extraction fields
 
