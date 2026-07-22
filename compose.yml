@@ -25,8 +25,36 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./source/init_table.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./mock-data/output:/var/lib/mysql-files/mock-data
+      - ./source/load_data.sql:/docker-entrypoint-initdb.d/02-load-data.sql:ro
 
+  postgres:
+    image: postgres:16
+    container_name: food-delivery-postgres
+
+    environment:
+      POSTGRES_DB: food_delivery_warehouse
+      POSTGRES_USER: warehouse_user
+      POSTGRES_PASSWORD: warehouse_password
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./warehouse/init_schema.sql:/docker-entrypoint-initdb.d/01-init-schema.sql:ro
+      - ./warehouse/seed_dimensions.sql:/docker-entrypoint-initdb.d/02-seed-dimensions.sql:ro
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U warehouse_user -d food_delivery_warehouse
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
 volumes:
   mongodb_data:
   mysql_data:
+  postgres_data:
