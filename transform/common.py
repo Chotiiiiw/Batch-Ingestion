@@ -36,7 +36,7 @@ def read_mongo_collection(spark, collection_name):
         .format("mongodb") \
         .option(
             "connection.uri",
-            "mongodb://localhost:27017",
+            "mongodb://localhost:27018",
         ) \
         .option(
             "database",
