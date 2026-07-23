@@ -35,7 +35,7 @@ CREATE TABLE restaurants (
 CREATE TABLE drivers (
     driver_id BIGINT PRIMARY KEY,
     driver_name VARCHAR(255) NOT NULL,
-    number_plate VARCHAR(50),
+    number_plate VARCHAR(50) NOT NULL,
     driver_status VARCHAR(50) NOT NULL,
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
