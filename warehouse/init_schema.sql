@@ -5,6 +5,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public;
 
 CREATE SCHEMA IF NOT EXISTS warehouse;
+CREATE SCHEMA IF NOT EXISTS staging;
 SET search_path TO warehouse, public;
 SET TIME ZONE 'UTC';
 
@@ -50,6 +51,26 @@ CREATE TABLE IF NOT EXISTS etl_batch (
             AND rejected_row_count >= 0
             AND loaded_row_count + rejected_row_count <= input_row_count
         )
+);
+
+
+-- ---------------------------------------------------------------------------
+-- Permanent staging tables
+-- ---------------------------------------------------------------------------
+
+CREATE UNLOGGED TABLE IF NOT EXISTS staging.customer (
+    batch_id VARCHAR(36) NOT NULL,
+    customer_id BIGINT NOT NULL,
+    full_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    phone VARCHAR(100),
+    city VARCHAR(100) NOT NULL,
+    valid_from TIMESTAMPTZ NOT NULL,
+    hash_diff CHAR(64) NOT NULL,
+    source_updated_at TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT pk_staging_customer
+        PRIMARY KEY (batch_id, customer_id)
 );
 
 
