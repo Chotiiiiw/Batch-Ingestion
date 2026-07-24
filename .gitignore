@@ -1,6 +1,16 @@
 .DS_Store
 __pycache__/
 *.py[cod]
+.venv/
 
 # Generated data can be recreated; do not commit it to Git.
 mock-data/output/
+
+# Local environment and credentials must never be committed.
+.env
+.env.*
+!.env.example
+
+# Private authentication keys must stay outside the repository.
+*.p8
+*.pem

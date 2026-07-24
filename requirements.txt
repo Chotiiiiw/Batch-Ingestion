@@ -1,2 +1,6 @@
 Faker>=24,<40
+cryptography>=46.0.5,<47
 psycopg[binary]>=3.2,<4
+pyspark==4.1.2
+python-dotenv==1.2.2
+snowflake-connector-python==4.7.1
