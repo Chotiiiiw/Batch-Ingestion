@@ -74,6 +74,56 @@ CREATE UNLOGGED TABLE IF NOT EXISTS staging.customer (
 );
 
 
+CREATE UNLOGGED TABLE IF NOT EXISTS staging.restaurant (
+    batch_id VARCHAR(36) NOT NULL,
+    restaurant_id BIGINT NOT NULL,
+    restaurant_name VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    address VARCHAR(255),
+    status VARCHAR(50) NOT NULL,
+    valid_from TIMESTAMPTZ NOT NULL,
+    hash_diff CHAR(64) NOT NULL,
+    source_updated_at TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT pk_staging_restaurant
+        PRIMARY KEY (batch_id, restaurant_id)
+);
+
+
+CREATE UNLOGGED TABLE IF NOT EXISTS staging.driver (
+    batch_id VARCHAR(36) NOT NULL,
+    driver_id BIGINT NOT NULL,
+    driver_name VARCHAR(255) NOT NULL,
+    number_plate VARCHAR(50),
+    driver_status VARCHAR(50) NOT NULL,
+    valid_from TIMESTAMPTZ NOT NULL,
+    hash_diff CHAR(64) NOT NULL,
+    source_updated_at TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT pk_staging_driver
+        PRIMARY KEY (batch_id, driver_id)
+);
+
+
+CREATE UNLOGGED TABLE IF NOT EXISTS staging.menu_item (
+    batch_id VARCHAR(36) NOT NULL,
+    menu_item_id VARCHAR(50) NOT NULL,
+    restaurant_id BIGINT NOT NULL,
+    menu_item_name VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    base_price NUMERIC(12, 2) NOT NULL,
+    available BOOLEAN NOT NULL,
+    tags TEXT[] NOT NULL,
+    valid_from TIMESTAMPTZ NOT NULL,
+    hash_diff CHAR(64) NOT NULL,
+    source_updated_at TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT pk_staging_menu_item
+        PRIMARY KEY (batch_id, menu_item_id)
+);
+
+
 -- ---------------------------------------------------------------------------
 -- Conformed dimensions
 -- ---------------------------------------------------------------------------

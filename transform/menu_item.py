@@ -1,9 +1,17 @@
 from pyspark.sql.functions import *
-from common import (
-    create_spark,
-    read_mongo_collection,
-    read_mysql_table,
-)
+
+if __package__:
+    from transform.common import (
+        create_spark,
+        read_mongo_collection,
+        read_mysql_table,
+    )
+else:
+    from common import (
+        create_spark,
+        read_mongo_collection,
+        read_mysql_table,
+    )
 
 
 def transform_menu_items(menu_items, restaurants):
