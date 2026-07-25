@@ -1,10 +1,9 @@
 from pyspark.sql.functions import *
-from common import (
-    bangkok_date_key,
-    create_spark,
-    optional_text,
-    read_mysql_table,
-)
+
+if __package__:
+    from transform.common import bangkok_date_key, create_spark, optional_text, read_mysql_table
+else:
+    from common import bangkok_date_key, create_spark, optional_text, read_mysql_table
 
 
 def transform_payments(payments, orders):

@@ -2,10 +2,7 @@ from uuid import uuid4
 
 import snowflake.connector
 
-from load.snowflake_config import (
-    build_snowflake_spark_options,
-    load_snowflake_config,
-)
+from load.snowflake_config import build_snowflake_spark_options, load_snowflake_config
 
 
 SNOWFLAKE_SOURCE = "net.snowflake.spark.snowflake"
