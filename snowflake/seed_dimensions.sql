@@ -1,0 +1,331 @@
+-- Run after snowflake/init_schema.sql.
+-- Every MERGE is idempotent, so this script is safe to run more than once.
+USE ROLE FOOD_DELIVERY_ETL_ROLE;
+USE WAREHOUSE FOOD_DELIVERY_WH;
+USE DATABASE FOOD_DELIVERY_DW;
+
+
+-- ---------------------------------------------------------------------------
+-- Bootstrap batch
+-- Unknown dimension members use this batch for lineage.
+-- ---------------------------------------------------------------------------
+
+MERGE INTO WAREHOUSE.ETL_BATCH AS TARGET
+USING (
+    SELECT
+        '00000000-0000-0000-0000-000000000001' AS BATCH_ID,
+        CURRENT_TIMESTAMP() AS STARTED_AT,
+        CURRENT_TIMESTAMP() AS COMPLETED_AT,
+        'SUCCEEDED' AS BATCH_STATUS
+) AS SOURCE
+ON TARGET.BATCH_ID = SOURCE.BATCH_ID
+WHEN NOT MATCHED THEN
+    INSERT (
+        BATCH_ID,
+        STARTED_AT,
+        COMPLETED_AT,
+        BATCH_STATUS
+    )
+    VALUES (
+        SOURCE.BATCH_ID,
+        SOURCE.STARTED_AT,
+        SOURCE.COMPLETED_AT,
+        SOURCE.BATCH_STATUS
+    );
+
+
+-- ---------------------------------------------------------------------------
+-- Unknown SCD Type 2 members
+-- Key 0 is used when a valid source row arrives before its dimension member.
+-- ---------------------------------------------------------------------------
+
+MERGE INTO WAREHOUSE.DIM_CUSTOMER AS TARGET
+USING (
+    SELECT
+        0 AS CUSTOMER_KEY,
+        0 AS CUSTOMER_ID,
+        'Unknown' AS FULL_NAME,
+        'unknown@invalid' AS EMAIL,
+        'Unknown' AS CITY,
+        '1900-01-01 00:00:00 +00:00'::TIMESTAMP_TZ AS VALID_FROM,
+        REPEAT('0', 64) AS HASH_DIFF,
+        '1900-01-01 00:00:00 +00:00'::TIMESTAMP_TZ
+            AS SOURCE_UPDATED_AT,
+        '00000000-0000-0000-0000-000000000001' AS BATCH_ID
+) AS SOURCE
+ON TARGET.CUSTOMER_KEY = SOURCE.CUSTOMER_KEY
+WHEN NOT MATCHED THEN
+    INSERT (
+        CUSTOMER_KEY,
+        CUSTOMER_ID,
+        FULL_NAME,
+        EMAIL,
+        CITY,
+        VALID_FROM,
+        HASH_DIFF,
+        SOURCE_UPDATED_AT,
+        BATCH_ID
+    )
+    VALUES (
+        SOURCE.CUSTOMER_KEY,
+        SOURCE.CUSTOMER_ID,
+        SOURCE.FULL_NAME,
+        SOURCE.EMAIL,
+        SOURCE.CITY,
+        SOURCE.VALID_FROM,
+        SOURCE.HASH_DIFF,
+        SOURCE.SOURCE_UPDATED_AT,
+        SOURCE.BATCH_ID
+    );
+
+
+MERGE INTO WAREHOUSE.DIM_RESTAURANT AS TARGET
+USING (
+    SELECT
+        0 AS RESTAURANT_KEY,
+        0 AS RESTAURANT_ID,
+        'Unknown' AS RESTAURANT_NAME,
+        'Unknown' AS CATEGORY,
+        'Unknown' AS CITY,
+        'UNKNOWN' AS STATUS,
+        '1900-01-01 00:00:00 +00:00'::TIMESTAMP_TZ AS VALID_FROM,
+        REPEAT('0', 64) AS HASH_DIFF,
+        '1900-01-01 00:00:00 +00:00'::TIMESTAMP_TZ
+            AS SOURCE_UPDATED_AT,
+        '00000000-0000-0000-0000-000000000001' AS BATCH_ID
+) AS SOURCE
+ON TARGET.RESTAURANT_KEY = SOURCE.RESTAURANT_KEY
+WHEN NOT MATCHED THEN
+    INSERT (
+        RESTAURANT_KEY,
+        RESTAURANT_ID,
+        RESTAURANT_NAME,
+        CATEGORY,
+        CITY,
+        STATUS,
+        VALID_FROM,
+        HASH_DIFF,
+        SOURCE_UPDATED_AT,
+        BATCH_ID
+    )
+    VALUES (
+        SOURCE.RESTAURANT_KEY,
+        SOURCE.RESTAURANT_ID,
+        SOURCE.RESTAURANT_NAME,
+        SOURCE.CATEGORY,
+        SOURCE.CITY,
+        SOURCE.STATUS,
+        SOURCE.VALID_FROM,
+        SOURCE.HASH_DIFF,
+        SOURCE.SOURCE_UPDATED_AT,
+        SOURCE.BATCH_ID
+    );
+
+
+MERGE INTO WAREHOUSE.DIM_MENU_ITEM AS TARGET
+USING (
+    SELECT
+        0 AS MENU_ITEM_KEY,
+        'UNKNOWN' AS MENU_ITEM_ID,
+        0 AS RESTAURANT_ID,
+        'Unknown' AS MENU_ITEM_NAME,
+        'Unknown' AS CATEGORY,
+        0.00::NUMBER(12, 2) AS BASE_PRICE,
+        FALSE AS AVAILABLE,
+        ARRAY_CONSTRUCT() AS TAGS,
+        '1900-01-01 00:00:00 +00:00'::TIMESTAMP_TZ AS VALID_FROM,
+        REPEAT('0', 64) AS HASH_DIFF,
+        '1900-01-01 00:00:00 +00:00'::TIMESTAMP_TZ
+            AS SOURCE_UPDATED_AT,
+        '00000000-0000-0000-0000-000000000001' AS BATCH_ID
+) AS SOURCE
+ON TARGET.MENU_ITEM_KEY = SOURCE.MENU_ITEM_KEY
+WHEN NOT MATCHED THEN
+    INSERT (
+        MENU_ITEM_KEY,
+        MENU_ITEM_ID,
+        RESTAURANT_ID,
+        MENU_ITEM_NAME,
+        CATEGORY,
+        BASE_PRICE,
+        AVAILABLE,
+        TAGS,
+        VALID_FROM,
+        HASH_DIFF,
+        SOURCE_UPDATED_AT,
+        BATCH_ID
+    )
+    VALUES (
+        SOURCE.MENU_ITEM_KEY,
+        SOURCE.MENU_ITEM_ID,
+        SOURCE.RESTAURANT_ID,
+        SOURCE.MENU_ITEM_NAME,
+        SOURCE.CATEGORY,
+        SOURCE.BASE_PRICE,
+        SOURCE.AVAILABLE,
+        SOURCE.TAGS,
+        SOURCE.VALID_FROM,
+        SOURCE.HASH_DIFF,
+        SOURCE.SOURCE_UPDATED_AT,
+        SOURCE.BATCH_ID
+    );
+
+
+MERGE INTO WAREHOUSE.DIM_DRIVER AS TARGET
+USING (
+    SELECT
+        0 AS DRIVER_KEY,
+        0 AS DRIVER_ID,
+        'Unknown' AS DRIVER_NAME,
+        'UNKNOWN' AS NUMBER_PLATE,
+        'UNKNOWN' AS DRIVER_STATUS,
+        '1900-01-01 00:00:00 +00:00'::TIMESTAMP_TZ AS VALID_FROM,
+        REPEAT('0', 64) AS HASH_DIFF,
+        '1900-01-01 00:00:00 +00:00'::TIMESTAMP_TZ
+            AS SOURCE_UPDATED_AT,
+        '00000000-0000-0000-0000-000000000001' AS BATCH_ID
+) AS SOURCE
+ON TARGET.DRIVER_KEY = SOURCE.DRIVER_KEY
+WHEN NOT MATCHED THEN
+    INSERT (
+        DRIVER_KEY,
+        DRIVER_ID,
+        DRIVER_NAME,
+        NUMBER_PLATE,
+        DRIVER_STATUS,
+        VALID_FROM,
+        HASH_DIFF,
+        SOURCE_UPDATED_AT,
+        BATCH_ID
+    )
+    VALUES (
+        SOURCE.DRIVER_KEY,
+        SOURCE.DRIVER_ID,
+        SOURCE.DRIVER_NAME,
+        SOURCE.NUMBER_PLATE,
+        SOURCE.DRIVER_STATUS,
+        SOURCE.VALID_FROM,
+        SOURCE.HASH_DIFF,
+        SOURCE.SOURCE_UPDATED_AT,
+        SOURCE.BATCH_ID
+    );
+
+
+-- ---------------------------------------------------------------------------
+-- Payment-method dimension
+-- ---------------------------------------------------------------------------
+
+MERGE INTO WAREHOUSE.DIM_PAYMENT_METHOD AS TARGET
+USING (
+    SELECT
+        0 AS PAYMENT_METHOD_KEY,
+        'UNKNOWN' AS PAYMENT_METHOD_CODE,
+        'Unknown' AS PAYMENT_METHOD_NAME
+) AS SOURCE
+ON TARGET.PAYMENT_METHOD_KEY = SOURCE.PAYMENT_METHOD_KEY
+WHEN NOT MATCHED THEN
+    INSERT (
+        PAYMENT_METHOD_KEY,
+        PAYMENT_METHOD_CODE,
+        PAYMENT_METHOD_NAME
+    )
+    VALUES (
+        SOURCE.PAYMENT_METHOD_KEY,
+        SOURCE.PAYMENT_METHOD_CODE,
+        SOURCE.PAYMENT_METHOD_NAME
+    );
+
+
+MERGE INTO WAREHOUSE.DIM_PAYMENT_METHOD AS TARGET
+USING (
+    SELECT
+        COLUMN1::VARCHAR AS PAYMENT_METHOD_CODE,
+        COLUMN2::VARCHAR AS PAYMENT_METHOD_NAME
+    FROM VALUES
+        ('CARD', 'Card'),
+        ('PROMPTPAY', 'PromptPay'),
+        ('CASH', 'Cash'),
+        ('WALLET', 'Wallet')
+) AS SOURCE
+ON TARGET.PAYMENT_METHOD_CODE = SOURCE.PAYMENT_METHOD_CODE
+WHEN NOT MATCHED THEN
+    INSERT (
+        PAYMENT_METHOD_CODE,
+        PAYMENT_METHOD_NAME
+    )
+    VALUES (
+        SOURCE.PAYMENT_METHOD_CODE,
+        SOURCE.PAYMENT_METHOD_NAME
+    );
+
+
+-- ---------------------------------------------------------------------------
+-- Date dimension
+-- Key 0 represents an unavailable date.
+-- Positive keys cover every date from 2020-01-01 through 2035-12-31.
+-- ---------------------------------------------------------------------------
+
+MERGE INTO WAREHOUSE.DIM_DATE AS TARGET
+USING (
+    SELECT 0 AS DATE_KEY
+) AS SOURCE
+ON TARGET.DATE_KEY = SOURCE.DATE_KEY
+WHEN NOT MATCHED THEN
+    INSERT (DATE_KEY)
+    VALUES (SOURCE.DATE_KEY);
+
+
+MERGE INTO WAREHOUSE.DIM_DATE AS TARGET
+USING (
+    SELECT
+        TO_NUMBER(
+            TO_CHAR(CALENDAR_DATE, 'YYYYMMDD')
+        ) AS DATE_KEY,
+        CALENDAR_DATE AS FULL_DATE,
+        DAY(CALENDAR_DATE) AS DAY_OF_MONTH,
+        DAYOFWEEKISO(CALENDAR_DATE) AS DAY_OF_WEEK,
+        DAYNAME(CALENDAR_DATE) AS DAY_NAME,
+        WEEKISO(CALENDAR_DATE) AS WEEK_OF_YEAR,
+        MONTH(CALENDAR_DATE) AS MONTH_NUMBER,
+        MONTHNAME(CALENDAR_DATE) AS MONTH_NAME,
+        QUARTER(CALENDAR_DATE) AS QUARTER_NUMBER,
+        YEAR(CALENDAR_DATE) AS YEAR_NUMBER,
+        DAYOFWEEKISO(CALENDAR_DATE) IN (6, 7) AS IS_WEEKEND
+    FROM (
+        SELECT
+            DATEADD(
+                DAY,
+                ROW_NUMBER() OVER (ORDER BY SEQ4()) - 1,
+                DATE '2020-01-01'
+            )::DATE AS CALENDAR_DATE
+        FROM TABLE(GENERATOR(ROWCOUNT => 5844))
+    )
+) AS SOURCE
+ON TARGET.DATE_KEY = SOURCE.DATE_KEY
+WHEN NOT MATCHED THEN
+    INSERT (
+        DATE_KEY,
+        FULL_DATE,
+        DAY_OF_MONTH,
+        DAY_OF_WEEK,
+        DAY_NAME,
+        WEEK_OF_YEAR,
+        MONTH_NUMBER,
+        MONTH_NAME,
+        QUARTER_NUMBER,
+        YEAR_NUMBER,
+        IS_WEEKEND
+    )
+    VALUES (
+        SOURCE.DATE_KEY,
+        SOURCE.FULL_DATE,
+        SOURCE.DAY_OF_MONTH,
+        SOURCE.DAY_OF_WEEK,
+        SOURCE.DAY_NAME,
+        SOURCE.WEEK_OF_YEAR,
+        SOURCE.MONTH_NUMBER,
+        SOURCE.MONTH_NAME,
+        SOURCE.QUARTER_NUMBER,
+        SOURCE.YEAR_NUMBER,
+        SOURCE.IS_WEEKEND
+    );
