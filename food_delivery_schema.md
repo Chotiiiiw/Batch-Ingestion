@@ -426,7 +426,9 @@ erDiagram
   MySQL, MongoDB, and Snowflake clients.
 - Source and audit timestamps use `TIMESTAMP_TZ`. Source values are normalized
   to UTC; `Asia/Bangkok` is applied only when deriving business date keys.
-- MongoDB menu tags use Snowflake `ARRAY`.
+- Spark serializes MongoDB menu tags as JSON text in staging to keep the
+  connector write path portable. The dimension parses that JSON into a
+  Snowflake `ARRAY`.
 - Surrogate keys use Snowflake identity columns. Key `0` is inserted explicitly
   for unknown members, while normal members use generated values.
 

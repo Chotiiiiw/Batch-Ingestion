@@ -1,0 +1,58 @@
+from load.snowflake_common import complete_batch, fail_batch, start_batch
+from load.snowflake_driver import merge_drivers, stage_drivers
+from transform.common import create_spark, read_mysql_table
+from transform.driver import transform_drivers
+
+def main():
+    spark = create_spark("snowflake-driver-pipeline")
+    batch_id = None
+
+    try:
+        drivers = read_mysql_table(
+            spark,
+            "drivers",
+        )
+
+        warehouse_drivers, rejected_drivers = \
+            transform_drivers(drivers)
+
+        input_row_count = drivers.count()
+        staged_row_count = warehouse_drivers.count()
+        rejected_row_count = rejected_drivers.count()
+
+        batch_id = start_batch(
+            input_row_count,
+            rejected_row_count,
+        )
+
+        stage_drivers(
+            warehouse_drivers,
+            batch_id,
+        )
+
+        loaded_row_count = merge_drivers(batch_id)
+
+        complete_batch(
+            batch_id,
+            loaded_row_count,
+        )
+
+        print("Batch ID:", batch_id)
+        print("Staged drivers:", staged_row_count)
+        print("Loaded driver versions:", loaded_row_count)
+
+    except Exception as error:
+        if batch_id is not None:
+            fail_batch(
+                batch_id,
+                error,
+            )
+
+        raise
+
+    finally:
+        spark.stop()
+
+
+if __name__ == "__main__":
+    main()
