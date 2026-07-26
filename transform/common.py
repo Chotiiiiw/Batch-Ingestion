@@ -1,12 +1,30 @@
+import os
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
+
+
+MYSQL_URL = os.getenv(
+    "MYSQL_URL",
+    "jdbc:mysql://localhost:3307/food_delivery_source",
+)
+
+MONGO_URI = os.getenv(
+    "MONGO_URI",
+    "mongodb://localhost:27018",
+)
+
+SPARK_MASTER = os.getenv(
+    "SPARK_MASTER",
+    "local[*]",
+)
 
 
 def create_spark(app_name):
     # Create the local Spark session
     spark = SparkSession.builder \
         .appName(app_name) \
-        .master("local[*]") \
+        .master(SPARK_MASTER) \
         .config("spark.sql.session.timeZone", "UTC") \
         .getOrCreate()
 
@@ -21,7 +39,7 @@ def read_mysql_table(spark, table_name):
         .format("jdbc") \
         .option(
             "url",
-            "jdbc:mysql://localhost:3307/food_delivery_source",
+            MYSQL_URL,
         ) \
         .option("dbtable", table_name) \
         .option("user", "etl_user") \
@@ -36,7 +54,7 @@ def read_mongo_collection(spark, collection_name):
         .format("mongodb") \
         .option(
             "connection.uri",
-            "mongodb://localhost:27018",
+            MONGO_URI,
         ) \
         .option(
             "database",

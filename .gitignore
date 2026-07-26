@@ -14,3 +14,7 @@ mock-data/output/
 # Private authentication keys must stay outside the repository.
 *.p8
 *.pem
+
+# Airflow runtime files and mounted credentials stay local.
+airflow/logs/
+airflow/keys/

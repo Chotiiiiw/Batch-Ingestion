@@ -1,3 +1,41 @@
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: airflow/Dockerfile
+  image: food-delivery-airflow:3.3.0
+  env_file:
+    - .env
+  environment: &airflow-common-environment
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__PARALLELISM: "4"
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "4"
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_API_JWT_SECRET:-local_airflow_jwt_secret}
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    MYSQL_URL: jdbc:mysql://mysql:3306/food_delivery_source
+    MONGO_URI: mongodb://mongodb:27017
+    SPARK_MASTER: local[2]
+    SPARK_LOCAL_IP: 127.0.0.1
+    PYSPARK_PYTHON: /usr/local/bin/python
+    PYSPARK_DRIVER_PYTHON: /usr/local/bin/python
+    PYTHONPATH: /opt/airflow/project
+    SNOWFLAKE_PRIVATE_KEY_PATH: /opt/airflow/keys/food_delivery_key.p8
+  volumes:
+    - .:/opt/airflow/project:ro
+    - ./airflow/dags:/opt/airflow/dags:ro
+    - ${SNOWFLAKE_KEYS_DIR:-./airflow/keys}:/opt/airflow/keys:ro
+    - airflow_logs:/opt/airflow/logs
+    - spark_ivy_cache:/home/airflow/.ivy2
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    airflow-postgres:
+      condition: service_healthy
+
 services:
   mongodb:
     image: mongo:8.0
@@ -8,6 +46,18 @@ services:
 
     volumes:
       - mongodb_data:/data/db
+
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - db.adminCommand('ping').ok
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   mysql:
     image: mysql:8.4
@@ -27,6 +77,15 @@ services:
       - ./source/init_table.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
       - ./mock-data/output:/var/lib/mysql-files/mock-data
       - ./source/load_data.sql:/docker-entrypoint-initdb.d/02-load-data.sql:ro
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
 
   postgres:
     image: postgres:16
@@ -54,7 +113,112 @@ services:
       retries: 10
       start_period: 10s
 
+  airflow-postgres:
+    image: postgres:16
+    container_name: food-delivery-airflow-postgres
+
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U airflow -d airflow
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: food-delivery-airflow-init
+    command: version
+
+    environment:
+      <<: *airflow-common-environment
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USERNAME:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-airflow}
+
+  airflow-apiserver:
+    <<: *airflow-common
+    container_name: food-delivery-airflow-apiserver
+    command: api-server
+
+    ports:
+      - "8080:8080"
+
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - http://localhost:8080/api/v2/monitor/health
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: food-delivery-airflow-scheduler
+    command: scheduler
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    container_name: food-delivery-airflow-dag-processor
+    command: dag-processor
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
 volumes:
   mongodb_data:
   mysql_data:
   postgres_data:
+  airflow_postgres_data:
+  airflow_logs:
+  spark_ivy_cache:
