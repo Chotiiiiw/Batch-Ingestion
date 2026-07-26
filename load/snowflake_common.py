@@ -1,6 +1,5 @@
 from datetime import datetime
 from uuid import uuid4
-from zoneinfo import ZoneInfo
 
 import snowflake.connector
 
@@ -8,7 +7,7 @@ from load.snowflake_config import build_snowflake_spark_options, load_snowflake_
 
 
 SNOWFLAKE_SOURCE = "net.snowflake.spark.snowflake"
-DEFAULT_MYSQL_WATERMARK = datetime(1900,1,1,tzinfo=ZoneInfo("Asia/Bangkok"))
+DEFAULT_MYSQL_WATERMARK = datetime(1900, 1, 1)
 
 
 def connect_snowflake():

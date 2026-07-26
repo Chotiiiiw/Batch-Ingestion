@@ -37,13 +37,7 @@ def main():
 
 
         # 4. Create the audit batch before writing to staging.
-        batch_id = start_batch(
-            "customer",
-            input_row_count,
-            rejected_row_count,
-            mysql_watermark_from,
-            mysql_watermark_to,
-        )
+        batch_id = start_batch("customer", input_row_count, rejected_row_count, mysql_watermark_from, mysql_watermark_to)
 
 
         # 5. Write the valid DataFrame to Snowflake staging.

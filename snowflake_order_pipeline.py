@@ -1,6 +1,6 @@
-from load.snowflake_common import complete_batch, fail_batch, start_batch
+from load.snowflake_common import complete_batch, fail_batch, get_last_mysql_watermark, start_batch
 from load.snowflake_order import merge_orders, stage_orders
-from transform.common import create_spark, read_mysql_table
+from transform.common import create_spark, get_mysql_watermark_to, read_mysql_incremental_table
 from transform.order import transform_orders
 
 
@@ -9,9 +9,19 @@ def main():
     batch_id = None
 
     try:
-        orders = read_mysql_table(
+        mysql_watermark_from = get_last_mysql_watermark("order")
+        mysql_watermark_to = get_mysql_watermark_to(
             spark,
             "orders",
+            "updated_at",
+        )
+
+        orders = read_mysql_incremental_table(
+            spark,
+            "orders",
+            "updated_at",
+            mysql_watermark_from,
+            mysql_watermark_to,
         )
 
         warehouse_orders, rejected_orders = \
@@ -21,7 +31,7 @@ def main():
         staged_row_count = warehouse_orders.count()
         rejected_row_count = rejected_orders.count()
 
-        batch_id = start_batch("order", input_row_count, rejected_row_count)
+        batch_id = start_batch("order", input_row_count, rejected_row_count, mysql_watermark_from, mysql_watermark_to)
 
         stage_orders(
             warehouse_orders,

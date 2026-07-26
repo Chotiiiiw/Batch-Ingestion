@@ -1,6 +1,6 @@
-from load.snowflake_common import complete_batch, fail_batch, start_batch
+from load.snowflake_common import complete_batch, fail_batch, get_last_mysql_watermark, start_batch
 from load.snowflake_driver import merge_drivers, stage_drivers
-from transform.common import create_spark, read_mysql_table
+from transform.common import create_spark, get_mysql_watermark_to, read_mysql_incremental_table
 from transform.driver import transform_drivers
 
 def main():
@@ -8,9 +8,19 @@ def main():
     batch_id = None
 
     try:
-        drivers = read_mysql_table(
+        mysql_watermark_from = get_last_mysql_watermark("driver")
+        mysql_watermark_to = get_mysql_watermark_to(
             spark,
             "drivers",
+            "updated_at",
+        )
+
+        drivers = read_mysql_incremental_table(
+            spark,
+            "drivers",
+            "updated_at",
+            mysql_watermark_from,
+            mysql_watermark_to,
         )
 
         warehouse_drivers, rejected_drivers = \
@@ -20,7 +30,7 @@ def main():
         staged_row_count = warehouse_drivers.count()
         rejected_row_count = rejected_drivers.count()
 
-        batch_id = start_batch("driver", input_row_count, rejected_row_count)
+        batch_id = start_batch("driver", input_row_count, rejected_row_count, mysql_watermark_from, mysql_watermark_to)
 
         stage_drivers(
             warehouse_drivers,

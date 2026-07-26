@@ -1,6 +1,6 @@
-from load.snowflake_common import complete_batch, fail_batch, start_batch
+from load.snowflake_common import complete_batch, fail_batch, get_last_mysql_watermark, start_batch
 from load.snowflake_restaurant import merge_restaurants, stage_restaurants
-from transform.common import create_spark, read_mysql_table
+from transform.common import create_spark, get_mysql_watermark_to, read_mysql_incremental_table
 from transform.restaurant import transform_restaurants
 
 
@@ -9,9 +9,19 @@ def main():
     batch_id = None
 
     try:
-        restaurants = read_mysql_table(
+        mysql_watermark_from = get_last_mysql_watermark("restaurant")
+        mysql_watermark_to = get_mysql_watermark_to(
             spark,
             "restaurants",
+            "updated_at",
+        )
+
+        restaurants = read_mysql_incremental_table(
+            spark,
+            "restaurants",
+            "updated_at",
+            mysql_watermark_from,
+            mysql_watermark_to,
         )
 
         warehouse_restaurants, rejected_restaurants = \
@@ -21,7 +31,7 @@ def main():
         staged_row_count = warehouse_restaurants.count()
         rejected_row_count = rejected_restaurants.count()
 
-        batch_id = start_batch("restaurant", input_row_count, rejected_row_count)
+        batch_id = start_batch("restaurant", input_row_count, rejected_row_count, mysql_watermark_from, mysql_watermark_to)
 
         stage_restaurants(
             warehouse_restaurants,

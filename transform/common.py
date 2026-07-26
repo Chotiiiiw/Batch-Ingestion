@@ -1,5 +1,4 @@
 import os
-from datetime import timezone
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
@@ -56,7 +55,7 @@ def _validate_mysql_identifier(identifier):
 
 def _format_mysql_watermark(watermark):
     if watermark.tzinfo is not None:
-        watermark = watermark.astimezone(timezone.utc).replace(tzinfo=None)
+        watermark = watermark.replace(tzinfo=None)
 
     return watermark.strftime("%Y-%m-%d %H:%M:%S.%f")
 
