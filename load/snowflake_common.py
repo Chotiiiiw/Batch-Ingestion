@@ -1,4 +1,6 @@
+from datetime import datetime
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import snowflake.connector
 
@@ -6,6 +8,12 @@ from load.snowflake_config import build_snowflake_spark_options, load_snowflake_
 
 
 SNOWFLAKE_SOURCE = "net.snowflake.spark.snowflake"
+DEFAULT_MYSQL_WATERMARK = datetime(
+    1900,
+    1,
+    1,
+    tzinfo=ZoneInfo("Asia/Bangkok"),
+)
 
 
 def connect_snowflake():
@@ -23,6 +31,35 @@ def connect_snowflake():
         schema=config["SNOWFLAKE_SCHEMA"],
         autocommit=False,
     )
+
+
+def get_last_mysql_watermark(pipeline_name):
+    if not pipeline_name:
+        raise ValueError("pipeline_name is required")
+
+    with connect_snowflake() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT MYSQL_WATERMARK_TO
+                FROM WAREHOUSE.ETL_BATCH
+                WHERE PIPELINE_NAME = %s
+                  AND BATCH_STATUS IN ('SUCCEEDED', 'PARTIAL')
+                  AND MYSQL_WATERMARK_TO IS NOT NULL
+                ORDER BY
+                    COMPLETED_AT DESC,
+                    STARTED_AT DESC
+                LIMIT 1
+                """,
+                (pipeline_name,),
+            )
+
+            row = cursor.fetchone()
+
+    if row is None:
+        return DEFAULT_MYSQL_WATERMARK
+
+    return row[0]
 
 
 def start_batch(input_row_count, rejected_row_count):
