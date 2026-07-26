@@ -29,10 +29,7 @@ def main():
         staged_row_count = warehouse_menu_items.count()
         rejected_row_count = rejected_menu_items.count()
 
-        batch_id = start_batch(
-            input_row_count,
-            rejected_row_count,
-        )
+        batch_id = start_batch("menu_item", input_row_count, rejected_row_count)
 
         stage_menu_items(
             warehouse_menu_items,

@@ -29,10 +29,7 @@ def main():
         staged_row_count = warehouse_payments.count()
         rejected_row_count = rejected_payments.count()
 
-        batch_id = start_batch(
-            input_row_count,
-            rejected_row_count,
-        )
+        batch_id = start_batch("payment", input_row_count, rejected_row_count)
 
         stage_payments(
             warehouse_payments,

@@ -1,6 +1,6 @@
-from load.snowflake_common import complete_batch, fail_batch, start_batch
+from load.snowflake_common import complete_batch, fail_batch, get_last_mysql_watermark, start_batch
 from load.snowflake_customer import merge_customers, stage_customers
-from transform.common import create_spark, read_mysql_table
+from transform.common import create_spark, get_mysql_watermark_to, read_mysql_incremental_table
 from transform.customer import transform_customers
 
 def main():
@@ -8,14 +8,26 @@ def main():
     batch_id = None
 
     try:
-        # 1. Extract customers from MySQL.
-        customers = read_mysql_table(
+        # 1. Define the source window for this incremental batch.
+        mysql_watermark_from = get_last_mysql_watermark("customer")
+        mysql_watermark_to = get_mysql_watermark_to(
             spark,
             "customers",
+            "updated_at",
         )
 
 
-        # 2. Transform and validate customers.
+        # 2. Extract only customers inside the source window.
+        customers = read_mysql_incremental_table(
+            spark,
+            "customers",
+            "updated_at",
+            mysql_watermark_from,
+            mysql_watermark_to,
+        )
+
+
+        # 3. Transform and validate customers.
         warehouse_customers, rejected_customers = \
             transform_customers(customers)
 
@@ -24,25 +36,28 @@ def main():
         rejected_row_count = rejected_customers.count()
 
 
-        # 3. Create the audit batch before writing to staging.
+        # 4. Create the audit batch before writing to staging.
         batch_id = start_batch(
+            "customer",
             input_row_count,
             rejected_row_count,
+            mysql_watermark_from,
+            mysql_watermark_to,
         )
 
 
-        # 4. Write the valid DataFrame to Snowflake staging.
+        # 5. Write the valid DataFrame to Snowflake staging.
         stage_customers(
             warehouse_customers,
             batch_id,
         )
 
 
-        # 5. Apply SCD Type 2 changes in Snowflake.
+        # 6. Apply SCD Type 2 changes in Snowflake.
         loaded_row_count = merge_customers(batch_id)
 
 
-        # 6. Mark the batch as successful.
+        # 7. Mark the batch as successful.
         complete_batch(
             batch_id,
             loaded_row_count,

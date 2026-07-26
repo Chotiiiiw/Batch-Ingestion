@@ -57,7 +57,7 @@ def get_last_mysql_watermark(pipeline_name):
     return row[0]
 
 
-def start_batch(input_row_count, rejected_row_count):
+def start_batch(pipeline_name, input_row_count, rejected_row_count, mysql_watermark_from=None, mysql_watermark_to=None):
     batch_id = str(uuid4())
 
     with connect_snowflake() as connection:
@@ -66,21 +66,30 @@ def start_batch(input_row_count, rejected_row_count):
                 """
                 INSERT INTO WAREHOUSE.ETL_BATCH (
                     BATCH_ID,
+                    PIPELINE_NAME,
                     STARTED_AT,
                     BATCH_STATUS,
+                    MYSQL_WATERMARK_FROM,
+                    MYSQL_WATERMARK_TO,
                     INPUT_ROW_COUNT,
                     REJECTED_ROW_COUNT
                 )
                 VALUES (
                     %s,
+                    %s,
                     CURRENT_TIMESTAMP(),
                     'RUNNING',
+                    %s,
+                    %s,
                     %s,
                     %s
                 )
                 """,
                 (
                     batch_id,
+                    pipeline_name,
+                    mysql_watermark_from,
+                    mysql_watermark_to,
                     input_row_count,
                     rejected_row_count,
                 ),

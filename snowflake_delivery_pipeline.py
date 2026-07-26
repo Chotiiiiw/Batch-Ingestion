@@ -29,10 +29,7 @@ def main():
         staged_row_count = warehouse_deliveries.count()
         rejected_row_count = rejected_deliveries.count()
 
-        batch_id = start_batch(
-            input_row_count,
-            rejected_row_count,
-        )
+        batch_id = start_batch("delivery", input_row_count, rejected_row_count)
 
         stage_deliveries(
             warehouse_deliveries,

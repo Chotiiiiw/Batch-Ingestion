@@ -20,10 +20,7 @@ def main():
         staged_row_count = warehouse_drivers.count()
         rejected_row_count = rejected_drivers.count()
 
-        batch_id = start_batch(
-            input_row_count,
-            rejected_row_count,
-        )
+        batch_id = start_batch("driver", input_row_count, rejected_row_count)
 
         stage_drivers(
             warehouse_drivers,
