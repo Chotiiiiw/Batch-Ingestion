@@ -1,6 +1,17 @@
-from load.snowflake_common import complete_batch, fail_batch, start_batch
+from load.snowflake_common import (
+    complete_batch,
+    fail_batch,
+    get_last_mysql_watermark,
+    start_batch,
+)
 from load.snowflake_order_item import merge_order_items, stage_order_items
-from transform.common import create_spark, read_mongo_collection, read_mysql_table
+from transform.common import (
+    create_spark,
+    get_mysql_watermark_to,
+    read_mongo_collection,
+    read_mysql_incremental_table,
+    read_mysql_table,
+)
 from transform.order_item import transform_order_items
 
 
@@ -9,11 +20,25 @@ def main():
     batch_id = None
 
     try:
-        order_items = read_mysql_table(
+        mysql_watermark_from = get_last_mysql_watermark(
+            "order_item",
+        )
+        mysql_watermark_to = get_mysql_watermark_to(
             spark,
             "order_items",
+            "updated_at",
         )
 
+        order_items = read_mysql_incremental_table(
+            spark,
+            "order_items",
+            "updated_at",
+            mysql_watermark_from,
+            mysql_watermark_to,
+        )
+
+        # Lookup sources remain full reads because an incremental order item
+        # still needs its parent order and menu-item context.
         orders = read_mysql_table(
             spark,
             "orders",
@@ -35,7 +60,7 @@ def main():
         staged_row_count = warehouse_order_items.count()
         rejected_row_count = rejected_order_items.count()
 
-        batch_id = start_batch("order_item", input_row_count, rejected_row_count)
+        batch_id = start_batch("order_item", input_row_count, rejected_row_count, mysql_watermark_from, mysql_watermark_to)
 
         stage_order_items(
             warehouse_order_items,

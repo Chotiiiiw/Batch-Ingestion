@@ -1,19 +1,32 @@
-from load.snowflake_common import complete_batch, fail_batch, start_batch
+from load.snowflake_common import *
 from load.snowflake_payment import merge_payments, stage_payments
-from transform.common import create_spark, read_mysql_table
+from transform.common import *
 from transform.payment import transform_payments
-
 
 def main():
     spark = create_spark("snowflake-payment-pipeline")
     batch_id = None
 
     try:
-        payments = read_mysql_table(
+        mysql_watermark_from = get_last_mysql_watermark(
+            "payment",
+        )
+        mysql_watermark_to = get_mysql_watermark_to(
             spark,
             "payments",
+            "updated_at",
         )
 
+        payments = read_mysql_incremental_table(
+            spark,
+            "payments",
+            "updated_at",
+            mysql_watermark_from,
+            mysql_watermark_to,
+        )
+
+        # The parent-order lookup remains a full read so every incremental
+        # payment can still be validated and enriched.
         orders = read_mysql_table(
             spark,
             "orders",
@@ -29,7 +42,7 @@ def main():
         staged_row_count = warehouse_payments.count()
         rejected_row_count = rejected_payments.count()
 
-        batch_id = start_batch("payment", input_row_count, rejected_row_count)
+        batch_id = start_batch("payment", input_row_count, rejected_row_count, mysql_watermark_from, mysql_watermark_to)
 
         stage_payments(
             warehouse_payments,
