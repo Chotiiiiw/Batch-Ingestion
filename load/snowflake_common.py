@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import snowflake.connector
@@ -8,6 +8,7 @@ from load.snowflake_config import build_snowflake_spark_options, load_snowflake_
 
 SNOWFLAKE_SOURCE = "net.snowflake.spark.snowflake"
 DEFAULT_MYSQL_WATERMARK = datetime(1900, 1, 1)
+DEFAULT_MONGO_WATERMARK = datetime(1900, 1, 1, tzinfo=timezone.utc)
 
 
 def connect_snowflake():
@@ -56,7 +57,44 @@ def get_last_mysql_watermark(pipeline_name):
     return row[0]
 
 
-def start_batch(pipeline_name, input_row_count, rejected_row_count, mysql_watermark_from=None, mysql_watermark_to=None):
+def get_last_mongo_watermark(pipeline_name):
+    if not pipeline_name:
+        raise ValueError("pipeline_name is required")
+
+    with connect_snowflake() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT MONGO_WATERMARK_TO
+                FROM WAREHOUSE.ETL_BATCH
+                WHERE PIPELINE_NAME = %s
+                  AND BATCH_STATUS IN ('SUCCEEDED', 'PARTIAL')
+                  AND MONGO_WATERMARK_TO IS NOT NULL
+                ORDER BY
+                    COMPLETED_AT DESC,
+                    STARTED_AT DESC
+                LIMIT 1
+                """,
+                (pipeline_name,),
+            )
+
+            row = cursor.fetchone()
+
+    if row is None:
+        return DEFAULT_MONGO_WATERMARK
+
+    return row[0]
+
+
+def start_batch(
+    pipeline_name,
+    input_row_count,
+    rejected_row_count,
+    mysql_watermark_from=None,
+    mysql_watermark_to=None,
+    mongo_watermark_from=None,
+    mongo_watermark_to=None,
+):
     batch_id = str(uuid4())
 
     with connect_snowflake() as connection:
@@ -70,6 +108,8 @@ def start_batch(pipeline_name, input_row_count, rejected_row_count, mysql_waterm
                     BATCH_STATUS,
                     MYSQL_WATERMARK_FROM,
                     MYSQL_WATERMARK_TO,
+                    MONGO_WATERMARK_FROM,
+                    MONGO_WATERMARK_TO,
                     INPUT_ROW_COUNT,
                     REJECTED_ROW_COUNT
                 )
@@ -81,6 +121,8 @@ def start_batch(pipeline_name, input_row_count, rejected_row_count, mysql_waterm
                     %s,
                     %s,
                     %s,
+                    %s,
+                    %s,
                     %s
                 )
                 """,
@@ -89,6 +131,8 @@ def start_batch(pipeline_name, input_row_count, rejected_row_count, mysql_waterm
                     pipeline_name,
                     mysql_watermark_from,
                     mysql_watermark_to,
+                    mongo_watermark_from,
+                    mongo_watermark_to,
                     input_row_count,
                     rejected_row_count,
                 ),
