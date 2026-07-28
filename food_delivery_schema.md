@@ -7,13 +7,14 @@
 | Extract | MySQL | Transactional data: customers, restaurants, orders, payments, deliveries |
 | Extract | MongoDB | Semi-structured menu catalog and menu options |
 | Transform | Apache Spark | Validation, cleansing, flattening, joining, deduplication |
-| Load | PostgreSQL | Analytical warehouse for reporting and BI |
+| Load | Snowflake | Columnar analytical warehouse for reporting and BI |
 
 ```mermaid
 flowchart LR
     MYSQL[(MySQL)] --> SPARK[Apache Spark]
     MONGO[(MongoDB)] --> SPARK
-    SPARK --> PG[(PostgreSQL)]
+    SPARK --> STAGING[(Snowflake STAGING)]
+    STAGING --> WAREHOUSE[(Snowflake WAREHOUSE)]
 ```
 
 ## 1. MySQL source schema
@@ -191,10 +192,14 @@ erDiagram
     }
 ```
 
-## 3. PostgreSQL warehouse schema
+## 3. Snowflake warehouse schema
 
-The target uses a fact constellation: four fact tables share conformed
-dimensions. Every dimension uses a warehouse-generated surrogate key, while
+The target database is `FOOD_DELIVERY_DW`. Spark writes transformed batches to
+the `STAGING` schema, and Snowflake SQL merges them into dimensions and facts in
+the `WAREHOUSE` schema.
+
+The warehouse uses a fact constellation: four fact tables share conformed
+dimensions. Every dimension uses a Snowflake-generated surrogate key, while
 the source identifier remains available for tracing records back to MySQL or
 MongoDB.
 
@@ -230,14 +235,14 @@ erDiagram
     DIM_DATE ||--o{ FACT_DELIVERY_ATTEMPT : assigned_date_key
 
     ETL_BATCH {
-        uuid batch_id PK
-        timestamptz started_at
-        timestamptz completed_at
+        varchar batch_id PK
+        timestamp_tz started_at
+        timestamp_tz completed_at
         varchar batch_status
-        timestamptz mysql_watermark_from
-        timestamptz mysql_watermark_to
-        timestamptz mongo_watermark_from
-        timestamptz mongo_watermark_to
+        timestamp_tz mysql_watermark_from
+        timestamp_tz mysql_watermark_to
+        timestamp_tz mongo_watermark_from
+        timestamp_tz mongo_watermark_to
         bigint input_row_count
         bigint loaded_row_count
         bigint rejected_row_count
@@ -251,13 +256,13 @@ erDiagram
         varchar email
         varchar phone
         varchar city
-        timestamptz valid_from
-        timestamptz valid_to
+        timestamp_tz valid_from
+        timestamp_tz valid_to
         boolean is_current
         varchar hash_diff
-        timestamptz source_updated_at
-        uuid batch_id FK
-        timestamptz loaded_at
+        timestamp_tz source_updated_at
+        varchar batch_id FK
+        timestamp_tz loaded_at
     }
 
     DIM_RESTAURANT {
@@ -268,13 +273,13 @@ erDiagram
         varchar city
         varchar address
         varchar status
-        timestamptz valid_from
-        timestamptz valid_to
+        timestamp_tz valid_from
+        timestamp_tz valid_to
         boolean is_current
         varchar hash_diff
-        timestamptz source_updated_at
-        uuid batch_id FK
-        timestamptz loaded_at
+        timestamp_tz source_updated_at
+        varchar batch_id FK
+        timestamp_tz loaded_at
     }
 
     DIM_MENU_ITEM {
@@ -285,14 +290,14 @@ erDiagram
         varchar category
         numeric base_price
         boolean available
-        text_array tags
-        timestamptz valid_from
-        timestamptz valid_to
+        array tags
+        timestamp_tz valid_from
+        timestamp_tz valid_to
         boolean is_current
         varchar hash_diff
-        timestamptz source_updated_at
-        uuid batch_id FK
-        timestamptz loaded_at
+        timestamp_tz source_updated_at
+        varchar batch_id FK
+        timestamp_tz loaded_at
     }
 
     DIM_PAYMENT_METHOD {
@@ -308,13 +313,13 @@ erDiagram
         varchar driver_name
         varchar number_plate
         varchar driver_status
-        timestamptz valid_from
-        timestamptz valid_to
+        timestamp_tz valid_from
+        timestamp_tz valid_to
         boolean is_current
         varchar hash_diff
-        timestamptz source_updated_at
-        uuid batch_id FK
-        timestamptz loaded_at
+        timestamp_tz source_updated_at
+        varchar batch_id FK
+        timestamp_tz loaded_at
     }
 
     DIM_DATE {
@@ -342,10 +347,10 @@ erDiagram
         numeric discount
         numeric delivery_fee
         numeric total_amount
-        timestamptz ordered_at
-        timestamptz source_updated_at
-        uuid batch_id FK
-        timestamptz loaded_at
+        timestamp_tz ordered_at
+        timestamp_tz source_updated_at
+        varchar batch_id FK
+        timestamp_tz loaded_at
     }
 
     FACT_ORDER_ITEM {
@@ -359,10 +364,10 @@ erDiagram
         integer quantity
         numeric unit_price
         numeric total_price
-        timestamptz ordered_at
-        timestamptz source_updated_at
-        uuid batch_id FK
-        timestamptz loaded_at
+        timestamp_tz ordered_at
+        timestamp_tz source_updated_at
+        varchar batch_id FK
+        timestamp_tz loaded_at
     }
 
     FACT_PAYMENT {
@@ -377,11 +382,11 @@ erDiagram
         varchar payment_status
         numeric amount
         varchar transaction_ref
-        timestamptz payment_created_at
-        timestamptz paid_at
-        timestamptz source_updated_at
-        uuid batch_id FK
-        timestamptz loaded_at
+        timestamp_tz payment_created_at
+        timestamp_tz paid_at
+        timestamp_tz source_updated_at
+        varchar batch_id FK
+        timestamp_tz loaded_at
     }
 
     FACT_DELIVERY_ATTEMPT {
@@ -394,14 +399,38 @@ erDiagram
         integer assigned_date_key FK
         varchar delivery_status
         numeric distance_km
-        timestamptz assigned_at
-        timestamptz picked_up_at
-        timestamptz delivered_at
-        timestamptz source_updated_at
-        uuid batch_id FK
-        timestamptz loaded_at
+        timestamp_tz assigned_at
+        timestamp_tz picked_up_at
+        timestamp_tz delivered_at
+        timestamp_tz source_updated_at
+        varchar batch_id FK
+        timestamp_tz loaded_at
     }
 ```
+
+### Snowflake physical design
+
+- `FOOD_DELIVERY_DW.STAGING` contains transient tables. They persist across
+  Spark and SQL sessions but can be rebuilt from the source systems, so they do
+  not need Snowflake Fail-safe storage.
+- `FOOD_DELIVERY_DW.WAREHOUSE` contains permanent standard tables for
+  dimensions, facts, and ETL lineage.
+- Snowflake standard tables use columnar micro-partition storage. The initial
+  design does not define indexes or clustering keys. Clustering should be
+  introduced only when production-scale query profiles show excessive scans.
+- `NOT NULL` and `CHECK` constraints protect row-level rules. Primary key,
+  unique, and foreign key constraints are retained as modeling metadata, but
+  Snowflake does not enforce them on standard tables. ETL merge conditions and
+  post-load data-quality checks enforce uniqueness and referential integrity.
+- `batch_id` remains a 36-character string for compatibility across Spark,
+  MySQL, MongoDB, and Snowflake clients.
+- Source and audit timestamps use `TIMESTAMP_TZ`. Source values are normalized
+  to UTC; `Asia/Bangkok` is applied only when deriving business date keys.
+- Spark serializes MongoDB menu tags as JSON text in staging to keep the
+  connector write path portable. The dimension parses that JSON into a
+  Snowflake `ARRAY`.
+- Surrogate keys use Snowflake identity columns. Key `0` is inserted explicitly
+  for unknown members, while normal members use generated values.
 
 ### Fact table grain
 
@@ -418,11 +447,12 @@ erDiagram
   Slowly Changing Dimension Type 2. A changed source record creates a new row;
   `valid_from`, `valid_to`, and `is_current` identify its effective period.
 - The first version uses source `created_at` as `valid_from`; later versions use
-  source `updated_at`. Each dimension enforces uniqueness on
-  `(source_identifier, valid_from)` and allows only one `is_current = true` row
-  per source identifier.
+  source `updated_at`. Snowflake merge logic and post-load data-quality checks
+  ensure uniqueness on `(source_identifier, valid_from)` and allow only one
+  `is_current = true` row per source identifier.
 - Version periods use the half-open interval `[valid_from, valid_to)` so two
-  versions never overlap. The current version has `valid_to = NULL`.
+  versions should never overlap. The current version has `valid_to = NULL`,
+  and an overlap check runs after each dimension load.
 - `hash_diff` contains a deterministic hash of the tracked business attributes.
   ETL creates a new version only when this hash changes; changes to audit fields
   alone do not create dimension versions.
@@ -433,7 +463,7 @@ erDiagram
 
 ### Key and loading rules
 
-- Event timestamps are stored as `TIMESTAMPTZ`. Positive `date_key` values use
+- Event timestamps are stored as `TIMESTAMP_TZ`. Positive `date_key` values use
   `YYYYMMDD` after converting the timestamp from UTC to the warehouse business
   timezone, `Asia/Bangkok`; key `0` is reserved for the unknown date.
 - `fact_order_item.ordered_at` and `order_date_key` are derived by joining each
@@ -463,12 +493,13 @@ erDiagram
   and timestamp, which are not currently available.
 - `etl_batch` stores the status, source watermark ranges, row counts, and error
   details for every Spark run. Each source-driven dimension and fact stores the
-  UUID `batch_id` of the batch that last inserted or updated it, plus
+  36-character `batch_id` of the batch that last inserted or updated it, plus
   `loaded_at` for lineage and replay audits.
 - Static `dim_date` and `dim_payment_method` rows are seeded during warehouse
   initialization and therefore do not require a `batch_id`.
-  Foreign-key columns and common query fields such as event date, `order_id`,
-  and `batch_id` should be indexed.
+- Snowflake does not use traditional indexes. Its micro-partition pruning is
+  monitored first; clustering keys are added only when table size and query
+  profiles justify their maintenance cost.
 
 ## 4. Incremental extraction fields
 
