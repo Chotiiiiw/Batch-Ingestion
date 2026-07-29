@@ -96,7 +96,7 @@ def food_delivery_batch_pipeline():
     def data_quality_checks():
         return (
             f"cd {PROJECT_DIRECTORY} && "
-            "python quality/check_warehouse.py"
+            "python -m quality.check_warehouse"
         )
 
     customer = customer_pipeline()

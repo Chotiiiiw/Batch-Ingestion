@@ -31,7 +31,46 @@ def stage_customers(warehouse_customers, batch_id):
 def merge_customers(batch_id):
     with connect_snowflake() as connection:
         with connection.cursor() as cursor:
-            # 1. Close current versions whose tracked values changed.
+            # 1. Fail before mutating the dimension when normalized emails
+            # collide inside the batch or with another current customer.
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM (
+                    SELECT LOWER(TRIM(EMAIL)) AS NORMALIZED_EMAIL
+                    FROM STAGING.CUSTOMER
+                    WHERE BATCH_ID = %s
+                    GROUP BY LOWER(TRIM(EMAIL))
+                    HAVING COUNT(DISTINCT CUSTOMER_ID) > 1
+
+                    UNION ALL
+
+                    SELECT LOWER(TRIM(SOURCE.EMAIL)) AS NORMALIZED_EMAIL
+                    FROM STAGING.CUSTOMER AS SOURCE
+                    JOIN WAREHOUSE.DIM_CUSTOMER AS CURRENT_CUSTOMER
+                      ON LOWER(TRIM(CURRENT_CUSTOMER.EMAIL))
+                         = LOWER(TRIM(SOURCE.EMAIL))
+                     AND CURRENT_CUSTOMER.IS_CURRENT = TRUE
+                     AND CURRENT_CUSTOMER.CUSTOMER_ID
+                         <> SOURCE.CUSTOMER_ID
+                    WHERE SOURCE.BATCH_ID = %s
+                    GROUP BY LOWER(TRIM(SOURCE.EMAIL))
+                ) AS EMAIL_CONFLICTS
+                """,
+                (
+                    batch_id,
+                    batch_id,
+                ),
+            )
+
+            email_conflict_count = cursor.fetchone()[0]
+
+            if email_conflict_count > 0:
+                raise RuntimeError(
+                    "Customer batch contains duplicate current emails"
+                )
+
+            # 2. Close current versions whose tracked values changed.
             cursor.execute(
                 """
                 UPDATE WAREHOUSE.DIM_CUSTOMER AS TARGET
@@ -54,7 +93,7 @@ def merge_customers(batch_id):
             changed_row_count = cursor.rowcount
 
 
-            # 2. Insert first versions and replacements for closed versions.
+            # 3. Insert first versions and replacements for closed versions.
             cursor.execute(
                 """
                 INSERT INTO WAREHOUSE.DIM_CUSTOMER (
@@ -112,7 +151,7 @@ def merge_customers(batch_id):
                 )
 
 
-            # 3. Remove only the staging rows merged by this batch.
+            # 4. Remove only the staging rows merged by this batch.
             cursor.execute(
                 """
                 DELETE FROM STAGING.CUSTOMER

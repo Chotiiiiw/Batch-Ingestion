@@ -26,6 +26,10 @@ def transform_drivers(drivers):
             trim(col("driver_name")),
         ) \
         .withColumn(
+            "phone",
+            trim(col("phone")),
+        ) \
+        .withColumn(
             "number_plate",
             upper(optional_text("number_plate")),
         ) \
@@ -55,6 +59,11 @@ def transform_drivers(drivers):
             col("driver_name").isNull()
             | (length(col("driver_name")) == 0),
             lit("MISSING_DRIVER_NAME"),
+        )
+        .when(
+            col("phone").isNull()
+            | (length(col("phone")) == 0),
+            lit("MISSING_PHONE"),
         )
         .when(
             col("number_plate").isNull()
@@ -96,6 +105,7 @@ def transform_drivers(drivers):
             concat_ws(
                 "||",
                 col("driver_name"),
+                col("phone"),
                 col("number_plate"),
                 col("driver_status"),
             ),
@@ -108,6 +118,7 @@ def transform_drivers(drivers):
     warehouse_drivers = valid_drivers.select(
         "driver_id",
         "driver_name",
+        "phone",
         "number_plate",
         "driver_status",
         col("created_at").alias("valid_from"),

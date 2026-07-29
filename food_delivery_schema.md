@@ -58,6 +58,7 @@ erDiagram
         bigint order_id PK
         bigint customer_id FK
         bigint restaurant_id FK
+        varchar delivery_address
         varchar order_status
         decimal subtotal
         decimal discount
@@ -95,7 +96,8 @@ erDiagram
     DRIVERS {
         bigint driver_id PK
         varchar driver_name
-        varchar number_plate
+        varchar phone
+        varchar number_plate UK
         varchar driver_status
         datetime created_at
         datetime updated_at
@@ -120,8 +122,12 @@ erDiagram
 - `order_items.menu_item_id` references a menu document in MongoDB.
 - MySQL cannot enforce a foreign key for this reference. Spark must validate it
   during transformation.
+- Phone numbers are required but not unique because a telecom provider may recycle a
+  cancelled number for a different customer or driver. Email and number plate
+  retain source-level uniqueness.
 - `order_items.menu_item_name` and `unit_price` are snapshots of values at the
-  time of purchase.
+  time of purchase. `orders.delivery_address` is also an order-time snapshot so
+  changing a customer profile cannot rewrite the destination of an old order.
 
 ## 2. MongoDB source schema
 
@@ -311,6 +317,7 @@ erDiagram
         bigint driver_key PK
         bigint driver_id
         varchar driver_name
+        varchar phone
         varchar number_plate
         varchar driver_status
         timestamp_tz valid_from
@@ -341,6 +348,7 @@ erDiagram
         bigint order_id UK
         bigint customer_key FK
         bigint restaurant_key FK
+        varchar delivery_address
         integer order_date_key FK
         varchar order_status
         numeric subtotal
@@ -454,6 +462,7 @@ erDiagram
   versions should never overlap. The current version has `valid_to = NULL`,
   and an overlap check runs after each dimension load.
 - `hash_diff` contains a deterministic hash of the tracked business attributes.
+  Driver phone changes are tracked and therefore create a new driver version.
   ETL creates a new version only when this hash changes; changes to audit fields
   alone do not create dimension versions.
 - `dim_date` and `dim_payment_method` are static reference dimensions and do

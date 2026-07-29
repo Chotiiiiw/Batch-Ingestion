@@ -13,6 +13,7 @@ def stage_drivers(warehouse_drivers, batch_id):
             "batch_id",
             "driver_id",
             "driver_name",
+            "phone",
             "number_plate",
             "driver_status",
             "valid_from",
@@ -29,6 +30,46 @@ def stage_drivers(warehouse_drivers, batch_id):
 def merge_drivers(batch_id):
     with connect_snowflake() as connection:
         with connection.cursor() as cursor:
+            # Fail before mutating the dimension when normalized plates
+            # collide inside the batch or with another current driver.
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM (
+                    SELECT UPPER(TRIM(NUMBER_PLATE))
+                        AS NORMALIZED_NUMBER_PLATE
+                    FROM STAGING.DRIVER
+                    WHERE BATCH_ID = %s
+                    GROUP BY UPPER(TRIM(NUMBER_PLATE))
+                    HAVING COUNT(DISTINCT DRIVER_ID) > 1
+
+                    UNION ALL
+
+                    SELECT UPPER(TRIM(SOURCE.NUMBER_PLATE))
+                        AS NORMALIZED_NUMBER_PLATE
+                    FROM STAGING.DRIVER AS SOURCE
+                    JOIN WAREHOUSE.DIM_DRIVER AS CURRENT_DRIVER
+                      ON UPPER(TRIM(CURRENT_DRIVER.NUMBER_PLATE))
+                         = UPPER(TRIM(SOURCE.NUMBER_PLATE))
+                     AND CURRENT_DRIVER.IS_CURRENT = TRUE
+                     AND CURRENT_DRIVER.DRIVER_ID <> SOURCE.DRIVER_ID
+                    WHERE SOURCE.BATCH_ID = %s
+                    GROUP BY UPPER(TRIM(SOURCE.NUMBER_PLATE))
+                ) AS NUMBER_PLATE_CONFLICTS
+                """,
+                (
+                    batch_id,
+                    batch_id,
+                ),
+            )
+
+            number_plate_conflict_count = cursor.fetchone()[0]
+
+            if number_plate_conflict_count > 0:
+                raise RuntimeError(
+                    "Driver batch contains duplicate current number plates"
+                )
+
             cursor.execute(
                 """
                 UPDATE WAREHOUSE.DIM_DRIVER AS TARGET
@@ -56,6 +97,7 @@ def merge_drivers(batch_id):
                 INSERT INTO WAREHOUSE.DIM_DRIVER (
                     DRIVER_ID,
                     DRIVER_NAME,
+                    PHONE,
                     NUMBER_PLATE,
                     DRIVER_STATUS,
                     VALID_FROM,
@@ -68,6 +110,7 @@ def merge_drivers(batch_id):
                 SELECT
                     SOURCE.DRIVER_ID,
                     SOURCE.DRIVER_NAME,
+                    SOURCE.PHONE,
                     SOURCE.NUMBER_PLATE,
                     SOURCE.DRIVER_STATUS,
                     CASE

@@ -9,10 +9,16 @@ CREATE TABLE customers (
     customer_id BIGINT PRIMARY KEY,
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
-    phone VARCHAR(100),
+    phone VARCHAR(100) NOT NULL,
     city VARCHAR(100) NOT NULL,
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
+
+    CONSTRAINT ck_customers_email_not_blank
+        CHECK (TRIM(email) <> ''),
+
+    CONSTRAINT ck_customers_phone_not_blank
+        CHECK (TRIM(phone) <> ''),
 
     INDEX idx_customers_updated_at (updated_at)
 ) ENGINE = InnoDB;
@@ -35,10 +41,17 @@ CREATE TABLE restaurants (
 CREATE TABLE drivers (
     driver_id BIGINT PRIMARY KEY,
     driver_name VARCHAR(255) NOT NULL,
-    number_plate VARCHAR(50) NOT NULL,
+    phone VARCHAR(100) NOT NULL,
+    number_plate VARCHAR(50) NOT NULL UNIQUE,
     driver_status VARCHAR(50) NOT NULL,
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
+
+    CONSTRAINT ck_drivers_phone_not_blank
+        CHECK (TRIM(phone) <> ''),
+
+    CONSTRAINT ck_drivers_number_plate_not_blank
+        CHECK (TRIM(number_plate) <> ''),
 
     INDEX idx_drivers_updated_at (updated_at)
 ) ENGINE = InnoDB;
@@ -48,6 +61,7 @@ CREATE TABLE orders (
     order_id BIGINT PRIMARY KEY,
     customer_id BIGINT NOT NULL,
     restaurant_id BIGINT NOT NULL,
+    delivery_address VARCHAR(500) NOT NULL,
     order_status VARCHAR(50) NOT NULL,
     subtotal DECIMAL(12, 2) NOT NULL,
     discount DECIMAL(12, 2) NOT NULL,
@@ -64,6 +78,9 @@ CREATE TABLE orders (
     CONSTRAINT fk_orders_restaurant
         FOREIGN KEY (restaurant_id)
         REFERENCES restaurants (restaurant_id),
+
+    CONSTRAINT ck_orders_delivery_address_not_blank
+        CHECK (TRIM(delivery_address) <> ''),
 
     INDEX idx_orders_customer (customer_id),
     INDEX idx_orders_restaurant (restaurant_id),

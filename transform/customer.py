@@ -52,6 +52,8 @@ def transform_customers(customers):
         | (col("full_name") == "") \
         | col("email").isNull() \
         | (col("email") == "") \
+        | col("phone").isNull() \
+        | (col("phone") == "") \
         | col("city").isNull() \
         | (col("city") == "") \
         | col("created_at").isNull() \

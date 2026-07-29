@@ -19,12 +19,6 @@ from contextlib import ExitStack
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-try:
-    from faker import Faker
-except ImportError as exc:  # pragma: no cover - helpful CLI error
-    raise SystemExit("Missing dependency. Install it with: python -m pip install Faker") from exc
-
-
 PROFILES = {
     # Fast smoke test for CI/local development.
     "demo": dict(customers=1_000, restaurants=50, menu_per_restaurant=20, drivers=100, orders=10_000),
@@ -61,10 +55,10 @@ ROADS = [
 CSV_FIELDS = {
     "customers.csv": ["customer_id", "full_name", "email", "phone", "city", "created_at", "updated_at"],
     "restaurants.csv": ["restaurant_id", "restaurant_name", "category", "city", "address", "status", "created_at", "updated_at"],
-    "orders.csv": ["order_id", "customer_id", "restaurant_id", "order_status", "subtotal", "discount", "delivery_fee", "total_amount", "ordered_at", "created_at", "updated_at"],
+    "orders.csv": ["order_id", "customer_id", "restaurant_id", "delivery_address", "order_status", "subtotal", "discount", "delivery_fee", "total_amount", "ordered_at", "created_at", "updated_at"],
     "order_items.csv": ["order_item_id", "order_id", "menu_item_id", "menu_item_name", "quantity", "unit_price", "total_price", "created_at", "updated_at"],
     "payments.csv": ["payment_id", "order_id", "payment_method", "payment_status", "amount", "transaction_ref", "paid_at", "created_at", "updated_at"],
-    "drivers.csv": ["driver_id", "driver_name", "number_plate", "driver_status", "created_at", "updated_at"],
+    "drivers.csv": ["driver_id", "driver_name", "phone", "number_plate", "driver_status", "created_at", "updated_at"],
     "deliveries.csv": ["delivery_id", "order_id", "driver_id", "delivery_status", "distance_km", "assigned_at", "picked_up_at", "delivered_at", "created_at", "updated_at"],
 }
 
@@ -152,14 +146,13 @@ def generate(args: argparse.Namespace) -> None:
         raise SystemExit("All row counts must be positive integers")
 
     rng = random.Random(args.seed)
-    Faker.seed(args.seed)
-    fake = Faker("th_TH")
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     data_end = datetime.fromisoformat(args.end_date).replace(tzinfo=timezone.utc)
     history_start = data_end - timedelta(days=730)
     order_start = data_end - timedelta(days=args.days - 1)
+    customer_cities: dict[int, str] = {}
     restaurant_menus: dict[int, list[tuple[str, str, int]]] = {}
     anomalies: Counter = Counter()
     # A small group still emits a legacy MongoDB schema: clustered source-system
@@ -178,23 +171,25 @@ def generate(args: argparse.Namespace) -> None:
 
         for customer_id in range(1, config["customers"] + 1):
             created = random_datetime(rng, history_start, data_end - timedelta(days=30))
+            customer_city = rng.choice(CITIES)
             customer = {
                 "customer_id": customer_id, "full_name": simple_english_name(customer_id),
-                "email": f"customer{customer_id}@example.com", "phone": fake.phone_number(),
-                "city": rng.choice(CITIES), "created_at": iso(created), "updated_at": iso(created),
+                "email": f"customer{customer_id}@example.com", "phone": f"08{customer_id:08d}",
+                "city": customer_city, "created_at": iso(created), "updated_at": iso(created),
             }
             if happens(rng, args.dirty_rate, 1.4):
                 anomaly = rng.choices(
-                    ["missing_phone", "city_format", "name_whitespace"], weights=[30, 50, 20]
+                    ["email_format", "city_format", "name_whitespace"], weights=[30, 50, 20]
                 )[0]
-                if anomaly == "missing_phone":
-                    customer["phone"] = ""
+                if anomaly == "email_format":
+                    customer["email"] = maybe_dirty_text(customer["email"], rng)
                 elif anomaly == "city_format":
                     customer["city"] = maybe_dirty_text(customer["city"], rng)
                 else:
                     customer["full_name"] = f"  {customer['full_name']} "
                 anomalies[f"customer.{anomaly}"] += 1
             writers["customers.csv"].writerow(customer)
+            customer_cities[customer_id] = customer_city
 
         for restaurant_id in range(1, config["restaurants"] + 1):
             created = random_datetime(rng, history_start, data_end - timedelta(days=90))
@@ -238,17 +233,17 @@ def generate(args: argparse.Namespace) -> None:
             created = random_datetime(rng, history_start, data_end - timedelta(days=30))
             driver = {
                 "driver_id": driver_id, "driver_name": simple_english_name(driver_id + 7),
-                "number_plate": f"BKK-{driver_id:05d}",
+                "phone": f"09{driver_id:08d}", "number_plate": f"BKK-{driver_id:05d}",
                 "driver_status": rng.choices(["ACTIVE", "INACTIVE"], weights=[95, 5])[0],
                 "created_at": iso(created), "updated_at": iso(created),
             }
             if happens(rng, args.dirty_rate, 0.6):
                 anomaly = rng.choices(
-                    ["driver_status_format", "missing_number_plate", "number_plate_format"],
+                    ["driver_status_format", "name_whitespace", "number_plate_format"],
                     weights=[50, 30, 20],
                 )[0]
-                if anomaly == "missing_number_plate":
-                    driver["number_plate"] = ""
+                if anomaly == "name_whitespace":
+                    driver["driver_name"] = f"  {driver['driver_name']} "
                 elif anomaly == "number_plate_format":
                     driver["number_plate"] = maybe_dirty_text(driver["number_plate"], rng)
                 else:
@@ -258,7 +253,12 @@ def generate(args: argparse.Namespace) -> None:
 
         order_item_id = payment_id = delivery_id = 1
         for order_id in range(1, config["orders"] + 1):
+            customer_id = rng.randint(1, config["customers"])
             restaurant_id = rng.randint(1, config["restaurants"])
+            delivery_address = (
+                f"{rng.randint(1, 999)} {rng.choice(ROADS)}, "
+                f"{customer_cities[customer_id]}"
+            )
             selected = rng.sample(restaurant_menus[restaurant_id], k=rng.randint(1, min(4, config["menu_per_restaurant"])))
             ordered_at = order_start + timedelta(
                 days=rng.randint(0, args.days - 1), hours=rng.choice(ORDER_HOURS), minutes=rng.randint(0, 59)
@@ -298,21 +298,24 @@ def generate(args: argparse.Namespace) -> None:
             status = rng.choices(["DELIVERED", "CANCELLED", "PREPARING"], weights=[85, 10, 5])[0]
             updated_at = ordered_at + timedelta(minutes=rng.randint(1, 75))
             order = {
-                "order_id": order_id, "customer_id": rng.randint(1, config["customers"]),
-                "restaurant_id": restaurant_id, "order_status": status,
+                "order_id": order_id, "customer_id": customer_id,
+                "restaurant_id": restaurant_id, "delivery_address": delivery_address,
+                "order_status": status,
                 "subtotal": subtotal, "discount": discount, "delivery_fee": delivery_fee,
                 "total_amount": total_amount, "ordered_at": iso(ordered_at),
                 "created_at": iso(ordered_at), "updated_at": iso(updated_at),
             }
             if happens(rng, args.dirty_rate, 0.64):
                 anomaly = rng.choices(
-                    ["status_format", "total_mismatch", "late_update"],
-                    weights=[34, 6, 60],
+                    ["status_format", "total_mismatch", "late_update", "address_whitespace"],
+                    weights=[30, 6, 54, 10],
                 )[0]
                 if anomaly == "status_format":
                     order["order_status"] = maybe_dirty_text(status, rng)
                 elif anomaly == "total_mismatch":
                     order["total_amount"] = total_amount + rng.choice([-10, 1, 10])
+                elif anomaly == "address_whitespace":
+                    order["delivery_address"] = f"  {delivery_address} "
                 else:
                     order["updated_at"] = iso(updated_at + timedelta(days=rng.randint(7, 30)))
                 anomalies[f"order.{anomaly}"] += 1
