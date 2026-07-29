@@ -22,6 +22,10 @@ def transform_orders(orders):
             col("restaurant_id").cast("long"),
         ) \
         .withColumn(
+            "delivery_address",
+            trim(col("delivery_address")),
+        ) \
+        .withColumn(
             "order_status",
             upper(trim(col("order_status"))),
         ) \
@@ -78,6 +82,11 @@ def transform_orders(orders):
             col("restaurant_id").isNull()
             | (col("restaurant_id") <= 0),
             lit("INVALID_RESTAURANT_ID"),
+        )
+        .when(
+            col("delivery_address").isNull()
+            | (length(col("delivery_address")) == 0),
+            lit("MISSING_DELIVERY_ADDRESS"),
         )
         .when(
             ~col("order_status").isin(
@@ -149,6 +158,7 @@ def transform_orders(orders):
         "order_id",
         "customer_id",
         "restaurant_id",
+        "delivery_address",
         "order_date_key",
         "order_status",
         "subtotal",

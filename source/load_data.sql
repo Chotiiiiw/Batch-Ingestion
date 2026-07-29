@@ -23,8 +23,8 @@ IGNORE 1 LINES
 SET
     customer_id = @customer_id,
     full_name = @full_name,
-    email = @email,
-    phone = NULLIF(@phone, ''),
+    email = LOWER(TRIM(@email)),
+    phone = TRIM(@phone),
     city = @city,
     created_at = STR_TO_DATE(
         @created_at,
@@ -82,6 +82,7 @@ IGNORE 1 LINES
 (
     @driver_id,
     @driver_name,
+    @phone,
     @number_plate,
     @driver_status,
     @created_at,
@@ -90,7 +91,8 @@ IGNORE 1 LINES
 SET
     driver_id = @driver_id,
     driver_name = @driver_name,
-    number_plate = NULLIF(@number_plate, ''),
+    phone = TRIM(@phone),
+    number_plate = TRIM(@number_plate),
     driver_status = @driver_status,
     created_at = STR_TO_DATE(
         @created_at,
@@ -114,6 +116,7 @@ IGNORE 1 LINES
     @order_id,
     @customer_id,
     @restaurant_id,
+    @delivery_address,
     @order_status,
     @subtotal,
     @discount,
@@ -127,6 +130,7 @@ SET
     order_id = @order_id,
     customer_id = @customer_id,
     restaurant_id = @restaurant_id,
+    delivery_address = TRIM(@delivery_address),
     order_status = @order_status,
     subtotal = @subtotal,
     discount = @discount,

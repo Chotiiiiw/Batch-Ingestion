@@ -47,6 +47,42 @@ CHECKS = {
             HAVING COUNT(*) > 1
         ) AS DUPLICATE_CURRENT_DRIVERS
     """,
+    "current_customer_email_is_unique": """
+        SELECT COUNT(*)
+        FROM (
+            SELECT LOWER(TRIM(EMAIL)) AS NORMALIZED_EMAIL
+            FROM WAREHOUSE.DIM_CUSTOMER
+            WHERE IS_CURRENT = TRUE
+            GROUP BY LOWER(TRIM(EMAIL))
+            HAVING COUNT(DISTINCT CUSTOMER_ID) > 1
+        ) AS DUPLICATE_CURRENT_CUSTOMER_EMAILS
+    """,
+    "current_driver_number_plate_is_unique": """
+        SELECT COUNT(*)
+        FROM (
+            SELECT UPPER(TRIM(NUMBER_PLATE)) AS NORMALIZED_NUMBER_PLATE
+            FROM WAREHOUSE.DIM_DRIVER
+            WHERE IS_CURRENT = TRUE
+            GROUP BY UPPER(TRIM(NUMBER_PLATE))
+            HAVING COUNT(DISTINCT DRIVER_ID) > 1
+        ) AS DUPLICATE_CURRENT_DRIVER_NUMBER_PLATES
+    """,
+    "customer_contacts_are_present": """
+        SELECT COUNT(*)
+        FROM WAREHOUSE.DIM_CUSTOMER
+        WHERE EMAIL IS NULL
+           OR LENGTH(TRIM(EMAIL)) = 0
+           OR PHONE IS NULL
+           OR LENGTH(TRIM(PHONE)) = 0
+    """,
+    "driver_identity_fields_are_present": """
+        SELECT COUNT(*)
+        FROM WAREHOUSE.DIM_DRIVER
+        WHERE PHONE IS NULL
+           OR LENGTH(TRIM(PHONE)) = 0
+           OR NUMBER_PLATE IS NULL
+           OR LENGTH(TRIM(NUMBER_PLATE)) = 0
+    """,
     "menu_item_has_at_most_one_current_version": """
         SELECT COUNT(*)
         FROM (
@@ -88,6 +124,12 @@ CHECKS = {
            OR RESTAURANT_KEY IS NULL
            OR ORDER_DATE_KEY IS NULL
            OR BATCH_ID IS NULL
+    """,
+    "fact_order_delivery_address_is_present": """
+        SELECT COUNT(*)
+        FROM WAREHOUSE.FACT_ORDER
+        WHERE DELIVERY_ADDRESS IS NULL
+           OR LENGTH(TRIM(DELIVERY_ADDRESS)) = 0
     """,
     "fact_order_item_foreign_keys_are_not_null": """
         SELECT COUNT(*)
