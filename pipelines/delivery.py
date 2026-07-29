@@ -1,3 +1,5 @@
+"""Run the incremental delivery pipeline from MySQL to Snowflake."""
+
 from load.snowflake_common import complete_batch, fail_batch, get_last_mysql_watermark, start_batch
 from load.snowflake_delivery import merge_deliveries, stage_deliveries
 from transform.common import create_spark, get_mysql_watermark_to, read_mysql_incremental_table, read_mysql_table

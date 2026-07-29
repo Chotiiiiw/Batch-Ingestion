@@ -1,4 +1,4 @@
-# Food Delivery Batch ETL — Example Database Schema
+# Food Delivery Batch ETL — Database Schema
 
 ## Data stack
 

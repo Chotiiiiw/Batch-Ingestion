@@ -43,25 +43,25 @@ def food_delivery_batch_pipeline():
     @task.bash
     def customer_pipeline():
         return build_spark_submit_command(
-            "snowflake_customer_pipeline.py"
+            "pipelines/customer.py"
         )
 
     @task.bash
     def restaurant_pipeline():
         return build_spark_submit_command(
-            "snowflake_restaurant_pipeline.py"
+            "pipelines/restaurant.py"
         )
 
     @task.bash
     def driver_pipeline():
         return build_spark_submit_command(
-            "snowflake_driver_pipeline.py"
+            "pipelines/driver.py"
         )
 
     @task.bash
     def menu_item_pipeline():
         return build_spark_submit_command(
-            "snowflake_menu_item_pipeline.py"
+            "pipelines/menu_item.py"
         )
 
     @task
@@ -71,25 +71,25 @@ def food_delivery_batch_pipeline():
     @task.bash
     def order_pipeline():
         return build_spark_submit_command(
-            "snowflake_order_pipeline.py"
+            "pipelines/order.py"
         )
 
     @task.bash
     def order_item_pipeline():
         return build_spark_submit_command(
-            "snowflake_order_item_pipeline.py"
+            "pipelines/order_item.py"
         )
 
     @task.bash
     def payment_pipeline():
         return build_spark_submit_command(
-            "snowflake_payment_pipeline.py"
+            "pipelines/payment.py"
         )
 
     @task.bash
     def delivery_pipeline():
         return build_spark_submit_command(
-            "snowflake_delivery_pipeline.py"
+            "pipelines/delivery.py"
         )
 
     @task.bash

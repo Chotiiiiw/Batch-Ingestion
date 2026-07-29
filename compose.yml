@@ -74,9 +74,9 @@ services:
 
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./source/init_table.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./mysql/init_table.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
       - ./mock-data/output:/var/lib/mysql-files/mock-data
-      - ./source/load_data.sql:/docker-entrypoint-initdb.d/02-load-data.sql:ro
+      - ./mysql/load_data.sql:/docker-entrypoint-initdb.d/02-load-data.sql:ro
 
     healthcheck:
       test:

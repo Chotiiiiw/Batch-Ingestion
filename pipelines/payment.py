@@ -1,3 +1,5 @@
+"""Run the incremental payment pipeline from MySQL to Snowflake."""
+
 from load.snowflake_common import *
 from load.snowflake_payment import merge_payments, stage_payments
 from transform.common import *
