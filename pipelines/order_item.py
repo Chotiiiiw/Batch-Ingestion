@@ -1,3 +1,5 @@
+"""Run the incremental order-item pipeline from MySQL to Snowflake."""
+
 from load.snowflake_common import (
     complete_batch,
     fail_batch,

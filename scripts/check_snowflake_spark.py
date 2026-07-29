@@ -1,3 +1,5 @@
+"""Check the Spark-to-Snowflake connector path."""
+
 from pyspark.sql import SparkSession
 
 from load.snowflake_config import build_snowflake_spark_options

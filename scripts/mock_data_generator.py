@@ -1,8 +1,8 @@
 """Generate deterministic mock data for the food-delivery batch pipeline.
 
 Examples:
-    python mock_data_generator.py --profile portfolio
-    python mock_data_generator.py --orders 1000000 --customers 100000
+    python scripts/mock_data_generator.py --profile portfolio
+    python scripts/mock_data_generator.py --orders 1000000 --customers 100000
 
 CSV files represent MySQL source tables. ``menu_items.jsonl`` represents the
 MongoDB collection and intentionally contains nested arrays for Spark to flatten.

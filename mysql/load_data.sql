@@ -1,3 +1,4 @@
+-- Load generated CSV fixtures into the MySQL transactional source.
 USE food_delivery_source;
 
 START TRANSACTION;

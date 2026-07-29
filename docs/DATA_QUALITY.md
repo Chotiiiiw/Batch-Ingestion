@@ -1,4 +1,4 @@
-# Raw mock-data quality contract
+# Mock-data quality contract
 
 The generator deliberately creates imperfect source data so the Spark job has
 real cleansing and quarantine work to perform. Its default 5% base rate is
